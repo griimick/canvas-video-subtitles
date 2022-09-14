@@ -35,11 +35,13 @@ const state = {
 	srtFileData: null,
 	isPlaying: false, // otherwise paused
 	globalError: false,
+	alternator: false,
 }
 
+setInterval(() => state.alternator = !state.alternator, 3500);
 // Ideally query segment tree of processing srtFileData
 function getSubtitleText(timestamp, map) {
-	return "Hello World! THIS ISTINASD \n sdasd";
+	return state.alternator ? "Small subtitle" : "This is a little bigger subtitle text";
 }
 
 // TODO: Describe maths in comments
