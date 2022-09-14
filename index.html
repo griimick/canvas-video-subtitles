@@ -4,10 +4,38 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + TS</title>
+    <title>canvas-video-subtitles</title>
   </head>
   <body>
-    <div id="app"></div>
+	  <main id="app">
+		  <h2>canvas-video-subtitles</h2>
+		  <p>A video player using <strong>HTML5 Canvas API</strong> which also supports loading subtitles along with it.</p>
+		  <section>
+			  <div class="card">
+				  <button id="input-video" type="button">Video Input</button>
+				  <input tab-index="-1" id="input-video" style="display:none" type="file" accept="video/*,.mp4" required>
+				  <span style="padding-left:5em">&nbsp;</span>
+				  <button id="input-subs" type="button">Subs Input</button>
+				  <input tab-index="-1" id="input-subs" style="display:none" type="file" accept=".srt" required>
+			  </div>
+		  </section>
+		  <section>
+			  <canvas id="player" class="bg-red-300 w-96 h-48">
+			  </canvas>
+			  <br/>
+			  <progress id="seekbar" value="0" max="100"></progress>
+		  </section>
+		  <section>
+			  <div class="card">
+				  <button id="rewind" type="button">Rewind</button>
+				  <button id="play-pause" type="button">Play</button>
+				  <button id="forward" type="button">Forward</button>
+			  </div>
+		  </section>
+		  <footer>
+			  <p>Made with 🐠 using <a href="http://vanilla-js.com/">vanilla.js</a></p>
+		  </footer>
+	  </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

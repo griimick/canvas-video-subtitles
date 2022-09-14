@@ -83,6 +83,46 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+button.progress {
+	border-color: orange;
+	color: orange;
+}
+
+button.success {
+	border-color: green;
+	color: green;
+}
+input::file-selector-button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+input::file-selector-button:hover {
+  border-color: #646cff;
+}
+
+input::file-selector-button:focus,
+input::file-selector-button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+canvas#player {
+	height: 480px;
+	width: 720px;
+	background-color: #3d3d3d;
+}
+
+progress[value]#seekbar {
+	width: 100%;
+	background: #646cff;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
