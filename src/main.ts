@@ -1,3 +1,6 @@
+import demoMp4 from '../demo.mp4';
+// @ts-ignore
+import demoSrt from '../demo.srt'; 
 import './style.css'
 import SrtParser from 'srt-parser-2';
 import IntervalTree from '@flatten-js/interval-tree'
@@ -15,6 +18,13 @@ const progressEl      = document.querySelector<HTMLProgressElement>("progress#se
 const bgVideoEl: HTMLVideoElement = document.createElement("video")!;
 const playerCanvasCtx = setupCanvas(playerCanvasEl);
 
+(async function loadDemoSrt () {
+	const res = await fetch(demoSrt);
+	const resData = await res.text();
+	processSrtData(resData);
+})()
+
+loadVideo(bgVideoEl, demoMp4);
 // https://web.dev/canvas-hidipi/
 // No more blurry text and image renders
 function setupCanvas(canvas: HTMLCanvasElement) {
@@ -71,9 +81,13 @@ function maintainAspectRatio (video: HTMLVideoElement, canvas: HTMLCanvasElement
 	return [x, y, video.videoWidth * scale, video.videoHeight * scale];
 }
 
-async function loadVideo(el: HTMLVideoElement, file: File) {
-	const fileURL = URL.createObjectURL(file)
-	el.src = fileURL;
+async function loadVideo(el: HTMLVideoElement, file: File | string) {
+	if (typeof file === 'string') {
+		el.src = file;
+	} else {
+		const fileURL = URL.createObjectURL(file)
+		el.src = fileURL;
+	}
 	// when video starts playing
 	bgVideoEl.addEventListener('play', () => {
 			const resizedDims = maintainAspectRatio(bgVideoEl, playerCanvasEl);
@@ -175,6 +189,13 @@ function makeSrtMap(srtLines: [Line?]) {
 	return state.srtTree;
 }
 
+function processSrtData(string: string) {
+	if (!srtParser.correctFormat(string))
+		throw new Error("Incorrect srt format");
+	state.parsedSrt = srtParser.fromSrt(string) as [Line];
+	state.srtTree = makeSrtMap(state.parsedSrt);
+}
+
 // Prepare video/input for "Video Input"
 videoInputEl.addEventListener("change", async (ev: Event) => {
 	const target = ev.target as HTMLInputElement;
@@ -209,10 +230,7 @@ srtInputEl.addEventListener("change", async (ev: Event) => {
 	
 	try {
 		state.srtFileData = await state.srtFile.text();
-		if (!srtParser.correctFormat(state.srtFileData))
-			throw new Error ("Incorrect srt format");
-		state.parsedSrt = srtParser.fromSrt(state.srtFileData) as [Line];
-		state.srtTree = makeSrtMap(state.parsedSrt);
+		processSrtData(state.srtFileData);
 		console.log(state.parsedSrt, "parsed srt file");
 	}
 	catch(err) {
