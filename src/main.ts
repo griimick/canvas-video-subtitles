@@ -1,18 +1,23 @@
 import './style.css'
+import SrtParser from 'srt-parser-2';
+import IntervalTree from '@flatten-js/interval-tree'
+import type { Line } from 'srt-parser-2';
+
+const srtParser = new SrtParser();
 
 const videoInputEl    = document.querySelector<HTMLInputElement>('input#input-video')!;
 const srtInputEl      = document.querySelector<HTMLInputElement>('input#input-subs')!;
 const videoButtonEl   = document.querySelector<HTMLButtonElement>('button#input-video')!;
 const srtButtonEl     = document.querySelector<HTMLButtonElement>('button#input-subs')!;
-const bgVideoEl       = document.createElement<HTMLVideoElemnt>("video");
 const playerCanvasEl  = document.querySelector<HTMLCanvasElement>("canvas#player")!;
 const playButtonEl    = document.querySelector<HTMLButtonElement>("button#play-pause")!;
 const progressEl      = document.querySelector<HTMLProgressElement>("progress#seekbar")!;
+const bgVideoEl: HTMLVideoElement = document.createElement("video")!;
 const playerCanvasCtx = setupCanvas(playerCanvasEl);
 
 // https://web.dev/canvas-hidipi/
 // No more blurry text and image renders
-function setupCanvas(canvas) {
+function setupCanvas(canvas: HTMLCanvasElement) {
 	// Get the device pixel ratio, falling back to 1.
 	const dpr = window.devicePixelRatio || 1;
 	// Get the size of the canvas in CSS pixels.
@@ -21,18 +26,30 @@ function setupCanvas(canvas) {
 	// size * the device pixel ratio.
 	canvas.width = rect.width * dpr;
 	canvas.height = rect.height * dpr;
-	const ctx = canvas.getContext('2d');
+	const ctx = canvas.getContext('2d')!;
 	// Scale all drawing operations by the dpr, so you
 	// don't have to worry about the difference.
 	ctx.scale(dpr, dpr);
 	return ctx;
 }
 
-const state = {
-	videoInputFile: null,
-	srtInputFile: null,
-	videoFileData: null,
+interface State {
+	videoFile: File | null,
+	srtFile: File | null,
+	srtFileData: string | null,
+	parsedSrt: [Line?]
+	srtTree: IntervalTree,
+	isPlaying: boolean,
+	globalError: boolean,
+	alternator: boolean,
+}
+
+const state : State = {
+	videoFile: null,
+	srtFile: null,
 	srtFileData: null,
+	parsedSrt: [],
+	srtTree: new IntervalTree(),
 	isPlaying: false, // otherwise paused
 	globalError: false,
 	alternator: false,
@@ -40,19 +57,21 @@ const state = {
 
 setInterval(() => state.alternator = !state.alternator, 3500);
 // Ideally query segment tree of processing srtFileData
-function getSubtitleText(timestamp, map) {
-	return state.alternator ? "Small subtitle" : "This is a little bigger subtitle text";
+function getSubtitleText(timestamp: number) {
+	const result = state.srtTree.search([timestamp, timestamp]);
+	if (result.length == 0) return null;
+	return result[0];
 }
 
 // TODO: Describe maths in comments
-function maintainAspectRatio (video, canvas) {
+function maintainAspectRatio (video: HTMLVideoElement, canvas: HTMLCanvasElement) {
 	const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
 	const x = (canvas.width / 2) - (video.videoWidth / 2) * scale;
     const y = (canvas.height / 2) - (video.videoHeight / 2) * scale;
 	return [x, y, video.videoWidth * scale, video.videoHeight * scale];
 }
 
-async function loadVideo(el, file) {
+async function loadVideo(el: HTMLVideoElement, file: File) {
 	const fileURL = URL.createObjectURL(file)
 	el.src = fileURL;
 	// when video starts playing
@@ -66,7 +85,7 @@ async function loadVideo(el, file) {
 
 			// render subtitles
 			// TODO: Line break and stuff !!!
-			const subtitleText = getSubtitleText(bgVideoEl.duration);
+			const subtitleText = getSubtitleText(bgVideoEl.currentTime);
 			if (subtitleText) {
 				// highlight text
 				const width = playerCanvasCtx.measureText(subtitleText).width;
@@ -127,30 +146,42 @@ async function loadVideo(el, file) {
 	});
 }
 
-async function readFile (file) {
-	return await file.text()
-}
-
-function validateVideoFile(ev) {
-	console.log("video selected", ev.target.files);
-	const [file] = ev.target.files
-	if (!file) return;
-	// if (!bgVideoEl.canPlayType(file.type)) return;
+function validateVideoFile(file: File) {
+	console.log("video selected", file);
+	if (!file) return null;
 	return file;
 }
 
-function validateSrtFile(ev) {
-	console.log("subs selected", ev.target.files);
-	const [file] = ev.target.files
-	if (!file) return
+function validateSrtFile(file: File) {
+	console.log("subs selected", file);
+	if (!file) return null;
 	return file;
+}
+
+function convertToMs(string: string): number {
+	const colonSplit = string.split(':');
+	const msSpit = colonSplit[2].split(',');
+	const hrMs = parseInt(colonSplit[0]) * 3600; 
+	const minMs = parseInt(colonSplit[1]) * 60;
+	const secMs = parseInt(msSpit[0]);
+	const ms = parseInt(msSpit[1]) / 1000;
+	return hrMs + minMs + secMs + ms;
+}
+
+function makeSrtMap(srtLines: [Line?]) {
+	for (const line of srtLines) {
+		state.srtTree.insert([convertToMs(line?.startTime!), convertToMs(line?.endTime!)], line?.text);
+	}
+	return state.srtTree;
 }
 
 // Prepare video/input for "Video Input"
-videoInputEl.addEventListener("change", async (ev) => {
-	if (ev.target.files.length == 0) return;
+videoInputEl.addEventListener("change", async (ev: Event) => {
+	const target = ev.target as HTMLInputElement;
+	if (target.files!.length == 0) return;
+	const videoFile = target.files?.item(0)!;
 	videoButtonEl.classList.toggle("progress");
-	state.videoFile = validateVideoFile(ev);
+	state.videoFile = validateVideoFile(videoFile);
 	if (!state.videoFile) return alert("Invalid Video Input selected");
 
 	try {
@@ -168,14 +199,21 @@ videoInputEl.addEventListener("change", async (ev) => {
 });
 
 // Prepare video/input for "SRT Input"
-srtInputEl.addEventListener("change", async (ev) => {
-	if (ev.target.files.length == 0) return;
+srtInputEl.addEventListener("change", async (ev: Event) => {
+	const target = ev.target as HTMLInputElement;
+	if (target.files!.length == 0) return;
+	const srtFile = target.files?.item(0)!;
 	srtButtonEl.classList.toggle("progress");
-	state.srtFile = validateSrtFile(ev);
+	state.srtFile = validateSrtFile(srtFile);
 	if (!state.srtFile) return alert("Invalid SRT Input selected");
 	
 	try {
-		state.srtFileData = await readFile(state.srtFile);
+		state.srtFileData = await state.srtFile.text();
+		if (!srtParser.correctFormat(state.srtFileData))
+			throw new Error ("Incorrect srt format");
+		state.parsedSrt = srtParser.fromSrt(state.srtFileData) as [Line];
+		state.srtTree = makeSrtMap(state.parsedSrt);
+		console.log(state.parsedSrt, "parsed srt file");
 	}
 	catch(err) {
 		console.error(err, "Error reading SRT File");
